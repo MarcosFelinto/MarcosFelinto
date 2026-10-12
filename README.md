@@ -5,7 +5,7 @@ Sistema web de **gestão de produção, custos, estoque e eficiência** para con
 🔗 Produção: https://kelita-producao.vercel.app
 📄 Manual do usuário: [Kelita_Producao_Manual_do_Usuario.pdf](Kelita_Producao_Manual_do_Usuario.pdf)
 
- 
+ teste
 ---
 
 ## Funcionalidades
