@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Kélita Produção: tela de login (centralização segura em telas baixas) ---------- */
+#loginScreen { align-items: flex-start; overflow-y: auto; }
+#loginScreen > div { margin: auto; }
+#menuFundo { display: none; }
+
+/* ---------- Perfil Funcionária: uma tela só, sem menu nem alertas ---------- */
+body.perfil-operador #btnMenu, body.perfil-operador #menuLateral, body.perfil-operador #menuFundo,
+body.perfil-operador header button[onclick="showTab('alertasTab')"] { display: none !important; }
+body.perfil-operador #layoutPrincipal { max-width: 640px; }
+#minhaProducaoTab .tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* ---------- Kélita Produção: celular e tablet (abaixo de 1024 px) ---------- */
+@media screen and (max-width: 1023px) {
+  /* Menu lateral em gaveta */
+  #menuLateral {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 60;
+    width: min(82vw, 300px); max-height: none; height: 100%;
+    border-radius: 0 14px 14px 0; padding-top: 14px;
+    transform: translateX(-105%); transition: transform .22s ease;
+    box-shadow: 0 10px 40px rgba(15, 23, 42, .35);
+    overscroll-behavior: contain;
+  }
+  body.menu-aberto #menuLateral { transform: none; }
+  body.menu-aberto #menuFundo { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(15, 23, 42, .5); }
+  body.menu-aberto { overflow: hidden; }
+  #menuLateral .nav-btn { padding-top: .75rem; padding-bottom: .75rem; }
+
+  /* Nada pode alargar a página: tabelas e faixas largas rolam dentro do próprio cartão */
+  html, body { overflow-x: clip; }
+  main { width: 100%; }
+  :where(main, .modal-overlay) :where(div, section):has(> table) { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  main table th, main table td { white-space: nowrap; }
+
+  /* Campos nunca passam da largura do cartão */
+  main select, main input, main textarea { max-width: 100%; }
+  main .flex-wrap > * { max-width: 100%; min-width: 0; }
+
+  /* Cabeçalhos de seção com título e botões: quebram linha */
+  main .flex.justify-between { flex-wrap: wrap; gap: .5rem; }
+
+  /* Abas internas (relatórios, produções): rolam na horizontal em vez de ocupar meia tela */
+  #relatoriosSubnav, #producoesSubnav { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  #relatoriosSubnav::-webkit-scrollbar, #producoesSubnav::-webkit-scrollbar { display: none; }
+  #relatoriosSubnav > *, #producoesSubnav > * { flex-shrink: 0; white-space: nowrap; }
+
+}
+
+/* ---------- Telefone (abaixo de 640 px) ---------- */
+@media screen and (max-width: 639px) {
+  #nuvemStatusTexto { display: none; }
+  #nuvemStatus { padding: .6rem; }
+  main .p-6 { padding: 1rem; }
+  main .p-5 { padding: .875rem; }
+  main h2.text-xl, main h2.text-2xl { font-size: 1.15rem; }
+  main .text-2xl, main .text-3xl { font-size: 1.35rem; }
+
+  /* Campos com 16 px: o iPhone não dá zoom ao tocar */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px !important; }
+
+  /* Janelas de cadastro ocupam a tela toda com rolagem própria */
+  .modal-overlay { padding: .5rem !important; align-items: flex-start !important; overflow-y: auto; }
+  .modal-overlay > div { padding: 1rem !important; max-height: none !important; margin: auto 0; }
+  .modal-overlay .grid-cols-2:not(.keep-2), .modal-overlay .grid-cols-3 { grid-template-columns: minmax(0, 1fr) !important; }
+  .modal-overlay .col-span-2, .modal-overlay .col-span-3 { grid-column: auto !important; }
+
+  /* Botões de ação ficam com área de toque confortável */
+  main button { min-height: 36px; }
+  #nuvemToasts { left: .5rem; right: .5rem; }
+}
+
+/* ---------- Kélita Produção: impressão ---------- */
+.so-impressao { display: none; }
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body { background: #fff !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  header, aside, #loginScreen, .modal-overlay, .no-print, #nuvemToasts, #nuvemCarregando,
+  button, input[type="file"] { display: none !important; }
+  body > div.flex-1 { padding: 0 !important; margin: 0 !important; max-width: none !important; gap: 0 !important; }
+  main { width: 100% !important; }
+  .tab-content:not(.active) { display: none !important; }
+  .shadow-sm, .shadow, .shadow-md, .shadow-lg { box-shadow: none !important; }
+  .overflow-x-auto, .overflow-hidden, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+  table { width: 100% !important; font-size: 8.5pt !important; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tr, canvas, .rounded-xl { break-inside: avoid; page-break-inside: avoid; }
+  th, td { padding: 3px 5px !important; }
+  canvas { max-width: 100% !important; height: auto !important; }
+  select, input { border: none !important; background: transparent !important; }
+
+  /* Impressão de relatório: só o relatório aberto, com cabeçalho próprio */
+  body.imprimindo-relatorio .so-impressao { display: block !important; }
+  body.imprimindo-relatorio #relatoriosTab > *:not(#printArea) { display: none !important; }
+  body.imprimindo-relatorio #printArea .subtab-content:not(.active) { display: none !important; }
+  body.imprimindo-relatorio #printArea select,
+  body.imprimindo-relatorio #printArea input { display: none !important; }
+}
