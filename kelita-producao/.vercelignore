@@ -1,6 +1,6 @@
 *.md
 _desenvolvimento
-_desenvolvimento/local/.dados
+_desenvolvimento/local/.dados*
 estilo
 node_modules
 publicar.bat

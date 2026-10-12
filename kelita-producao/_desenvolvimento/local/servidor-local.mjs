@@ -24,7 +24,26 @@ const porta = Number(args.find(a => /^\d+$/.test(a))) || 8787;
 process.env.SESSION_SECRET = 'kelita-local';
 const importar = rel => import(pathToFileURL(path.join(RAIZ, rel)).href);
 
-const db = await PGlite.create(DADOS);
+let db;
+try {
+  db = await PGlite.create(DADOS);
+} catch (e) {
+  console.error('\nNão foi possível abrir o banco local em ' + DADOS + '.');
+  console.error('Confira se não há outro "npm run local" aberto usando a mesma pasta.');
+  console.error('Se não houver, o banco local está corrompido: rode  npm run local -- --zerar  para recriá-lo a partir do backup.\n');
+  process.exit(1);
+}
+// Ctrl+C: fecha o banco antes de sair (encerrar no meio de uma gravação pode corromper a pasta).
+let saindo = false;
+for (const sinal of ['SIGINT', 'SIGTERM', 'SIGBREAK']) {
+  process.on(sinal, async () => {
+    if (saindo) return;
+    saindo = true;
+    console.log('\nFechando o banco local…');
+    try { await db.close(); } catch (e) {}
+    process.exit(0);
+  });
+}
 const dbmod = await importar('api/_lib/db.js');
 dbmod.usarExecutor(async (texto, params) => (await db.query(texto, params)).rows);
 const seg = await importar('api/_lib/seguranca.js');

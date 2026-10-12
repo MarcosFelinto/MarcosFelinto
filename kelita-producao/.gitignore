@@ -1,4 +1,4 @@
 .vercel
 .env*
-_desenvolvimento/local/.dados
+_desenvolvimento/local/.dados*
 node_modules
