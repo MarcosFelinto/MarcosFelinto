@@ -14,7 +14,6 @@
 // apenas a marca (tabela, id, seq) para avisar os outros navegadores.
 // ============================================================================
 import { neon } from '@neondatabase/serverless';
-import SEED from './seed.js';
 import { hashSenha, gerarSalt } from './seguranca.js';
 
 export const TABELAS = ['PRODUCAO', 'INSUMOS', 'FUNCIONARIOS', 'EQUIPES', 'PRODUTOS', 'CATEGORIAS',
@@ -52,6 +51,10 @@ export function garantirEsquema() {
 }
 
 async function criarEsquema() {
+  // Caminho rápido (quase sempre): o banco já está pronto — uma consulta só em vez de 7
+  // comandos de DDL a cada partida a frio da função.
+  const [pronto] = await q(`select to_regclass('kp_exclusoes_seq') is not null as ok`);
+  if (pronto && pronto.ok) return;
   await q(`create sequence if not exists kp_seq`);
   await q(`create table if not exists kp_registros (
       tabela text not null,
@@ -72,14 +75,17 @@ async function criarEsquema() {
       excluido_em timestamptz not null default now(),
       excluido_por text,
       primary key (tabela, id))`);
-  await q(`create index if not exists kp_exclusoes_seq on kp_exclusoes (seq)`);
   await semear();
+  // Por último: a existência deste índice é a marca de "esquema e carga inicial concluídos".
+  await q(`create index if not exists kp_exclusoes_seq on kp_exclusoes (seq)`);
 }
 
 // Primeira execução: carrega a base inicial (backup do sistema) para o banco vazio.
 async function semear() {
   const [{ total }] = await q(`select count(*)::int as total from kp_registros`);
   if (total > 0) return;
+  // A base inicial (≈470 KB) só é carregada quando o banco está vazio.
+  const { default: SEED } = await import('./seed.js');
   const linhas = [];
   for (const tabela of Object.keys(SEED.registros || {})) {
     for (const reg of SEED.registros[tabela]) {

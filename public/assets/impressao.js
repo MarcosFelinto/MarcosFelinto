@@ -159,3 +159,6 @@ function exportarRelatorioAtualPDF() {
     doc.save('relatorio_' + nomeArq + '_' + hojeISO() + '.pdf');
     registrarLog('EXPORTAR', 'RELATORIO', 'PDF do relatório "' + titulo + '"');
 }
+
+// jsPDF é carregado só na hora de exportar (ver carregarLib no index.html).
+if (typeof comLib === 'function') exportarRelatorioAtualPDF = comLib('pdf', exportarRelatorioAtualPDF);

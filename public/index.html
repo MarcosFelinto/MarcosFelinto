@@ -8,14 +8,15 @@
     <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="assets/app.css?v=90cc5a9a">
-    <script src="assets/lib/chart.umd.js"></script>
-    <script src="assets/lib/xlsx.full.min.js"></script>
-    <script src="assets/lib/jspdf.umd.min.js"></script>
-    <script src="assets/lib/jspdf.plugin.autotable.min.js"></script>
-    <script src="assets/lib/sweetalert2.all.min.js?v=df4ddb0d"></script>
-    <script src="assets/lib/ably.min.js?v=655e31e3"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <!-- defer: baixam em paralelo sem travar a montagem da página; só são usadas depois do login.
+         Excel (SheetJS) e PDF (jsPDF) são carregados só quando o usuário exporta: ver carregarLib(). -->
+    <script defer src="assets/lib/chart.umd.js"></script>
+    <script defer src="assets/lib/sweetalert2.all.min.js?v=df4ddb0d"></script>
+    <script defer src="assets/lib/ably.min.js?v=655e31e3"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
@@ -2030,16 +2031,22 @@
             if (!Array.isArray(state.filaSync)) state.filaSync = [];
             if (!snapshotSync) { snapshotSync = montarSnapshot(); return; }
             const agora = agoraISO();
+            // A impressão digital ignora metadados e controle local, então a calculada aqui
+            // continua válida depois dos carimbos: o novo snapshot sai desta mesma passada
+            // (antes a base inteira era serializada duas vezes a cada salvamento).
+            const novoSnap = {};
 
             Object.keys(TABELAS_SYNC).forEach(tab => {
                 const lista = state[TABELAS_SYNC[tab]] || [];
                 const antes = snapshotSync[tab] || {};
                 const vistos = {};
+                const snapTab = novoSnap[tab] = {};
 
                 lista.forEach(reg => {
                     if (!reg || !reg.id) return;
                     vistos[reg.id] = true;
                     const fp = impressaoRegistro(reg);
+                    snapTab[reg.id] = fp;
                     if (antes[reg.id] === undefined) {
                         if (!reg.created_at) reg.created_at = agora;
                         if (!reg.updated_at) reg.updated_at = agora;
@@ -2073,7 +2080,7 @@
                 });
             });
 
-            snapshotSync = montarSnapshot();
+            snapshotSync = novoSnap;
         }
 
         function foiExcluidoLocalmente(tabela, id) {
@@ -2511,29 +2518,42 @@
             if (subId === 'prodSubNova') renderizarCardsProducao();
             if (subId === 'prodSubAndamento') renderizarProducoesAtivas();
             if (subId === 'prodSubHistorico') renderizarHistoricoProducoes();
-            if (subId === 'relSubTempos') renderizarRelatorioTempos();
-            if (subId === 'relSubProduto') renderizarGraficoProdutoRelatorio();
-            if (subId === 'relSubFuncionario') renderizarRelatorioFuncionario();
-            if (subId === 'relSubEquipe') renderizarRelatorioEquipe();
-            if (subId === 'relSubCustos') renderizarRelatorioCustos();
-            if (subId === 'relSubMargem') renderizarRelatorioMargem();
-            if (subId === 'relSubMaoObra') renderizarRelatorioMaoObra();
-            if (subId === 'relSubABC') renderizarRelatorioABC();
-            if (subId === 'relSubWIP') renderizarRelatorioWIP();
-            if (subId === 'relSubEtapas') renderizarRelatorioEtapas();
-            if (subId === 'relSubPerdas') renderizarRelatorioPerdasMotivo();
-            if (subId === 'relSubComparativo') renderizarRelatorioComparativo();
-            if (subId === 'relSubCompras') renderizarRelatorioCompras();
-            if (subId === 'relSubMovimentacoes') renderizarRelatorioMovimentacoes();
-            if (subId === 'relSubFicha') renderizarRelatorioFichaCusto();
+            if (RENDER_RELATORIO[subId]) RENDER_RELATORIO[subId]();
         }
+
+        // Cada sub-relatório é desenhado só quando está visível (ao abrir e a cada atualização).
+        const RENDER_RELATORIO = {
+            relSubGeral:         () => renderizarRelatorioGeral(),
+            relSubProduto:       () => { renderizarRelatorioPorProduto(); renderizarGraficoProdutoRelatorio(); },
+            relSubTempos:        () => renderizarRelatorioTempos(),
+            relSubFuncionario:   () => renderizarRelatorioFuncionario(),
+            relSubEquipe:        () => renderizarRelatorioEquipe(),
+            relSubCustos:        () => renderizarRelatorioCustos(),
+            relSubMargem:        () => renderizarRelatorioMargem(),
+            relSubMaoObra:       () => renderizarRelatorioMaoObra(),
+            relSubABC:           () => renderizarRelatorioABC(),
+            relSubEstoque:       () => renderizarRelatorioEstoque(),
+            relSubConsumo:       () => renderizarRelatorioConsumo(),
+            relSubWIP:           () => renderizarRelatorioWIP(),
+            relSubEtapas:        () => renderizarRelatorioEtapas(),
+            relSubPerdas:        () => renderizarRelatorioPerdasMotivo(),
+            relSubComparativo:   () => renderizarRelatorioComparativo(),
+            relSubCompras:       () => renderizarRelatorioCompras(),
+            relSubMovimentacoes: () => renderizarRelatorioMovimentacoes(),
+            relSubFicha:         () => renderizarRelatorioFichaCusto(),
+            relSubGerencial:     () => renderizarRelatorioGerencial()
+        };
 
         function fecharModal(id) { const el = document.getElementById(id); if (el) el.classList.add('hidden'); }
         function abrirModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
 
-        function fmtR$(v) { return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
-        function fmtNum(v, casas) { const c = (casas === undefined || casas === null) ? 2 : casas; return (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits: c, maximumFractionDigits: c}); }
-        function fmtPct(v) { return (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%'; }
+        // Formatadores reaproveitados: toLocaleString com opções cria um formatador novo a cada
+        // chamada, e as tabelas chamam isto milhares de vezes por tela.
+        const FORMATADORES = {};
+        function formatador(c) { return FORMATADORES[c] || (FORMATADORES[c] = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c })); }
+        function fmtR$(v) { return 'R$ ' + formatador(2).format(Number(v)||0); }
+        function fmtNum(v, casas) { const c = (casas === undefined || casas === null) ? 2 : casas; return formatador(c).format(Number(v)||0); }
+        function fmtPct(v) { return formatador(1).format(Number(v)||0) + '%'; }
 
         // ============================================================
         // HELPERS DE BUSCA
@@ -2745,10 +2765,10 @@
             tbody.innerHTML = '';
             if (state.logs.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum registro ainda.</td></tr>'; return; }
             state.logs.slice(-200).reverse().forEach(l => {
-                tbody.innerHTML += `<tr class="border-b text-slate-500">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b text-slate-500">
                     <td class="p-3 font-mono">${esc(l.data)}</td><td class="p-3 font-bold text-slate-700">${esc(l.usuario)}</td>
                     <td class="p-3">${esc(l.perfil)}</td><td class="p-3 font-semibold text-indigo-600">${esc(l.acao)}</td>
-                    <td class="p-3">${l.entidade||''}</td><td class="p-3">${esc(l.detalhes)}</td></tr>`;
+                    <td class="p-3">${l.entidade||''}</td><td class="p-3">${esc(l.detalhes)}</td></tr>`);
             });
         }
 
@@ -2760,9 +2780,9 @@
             const ul = document.getElementById('listaCategorias');
             ul.innerHTML = '';
             state.categorias.forEach(c => {
-                ul.innerHTML += `<li class="py-2 flex justify-between items-center">
+                ul.insertAdjacentHTML('beforeend', `<li class="py-2 flex justify-between items-center">
                     <span>${esc(c.nome)}</span>
-                    <button onclick="excluirCategoria('${c.id}')" class="text-red-500 text-xs"><i class="fa-solid fa-trash"></i></button></li>`;
+                    <button onclick="excluirCategoria('${c.id}')" class="text-red-500 text-xs"><i class="fa-solid fa-trash"></i></button></li>`);
             });
         }
         function adicionarCategoria() {
@@ -2917,7 +2937,7 @@
                 const eq = getEquipe(f.equipeId);
                 const horas = horasProdutivasMes(f);
                 const mensal = f.custoManual ? custoHoraFuncionario(f) * horas : custoMensalFuncionario(f);
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3 font-mono">${esc(f.codigo)}</td>
                     <td class="p-3 font-bold text-slate-800">${esc(f.nome)}<div class="text-[10px] font-normal text-slate-400">${LABEL_VINCULO[f.vinculo]||f.vinculo||''}</div></td>
                     <td class="p-3">${esc(f.cargo)}${f.funcao?' <span class="text-slate-400">/ '+esc(f.funcao)+'</span>':''}</td>
@@ -2935,7 +2955,7 @@
                         <button onclick="abrirModalFuncionario('${f.id}')" class="text-indigo-600" title="Editar"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="criarAcessoFuncionaria('${f.id}')" class="text-sky-600" title="Acesso pelo celular (lançar a própria produção)"><i class="fa-solid fa-mobile-screen-button"></i></button>
                         <button onclick="excluirFuncionario('${f.id}')" class="text-red-500" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                    </div></td></tr>`;
+                    </div></td></tr>`);
             });
 
             const kpis = document.getElementById('funcKpis');
@@ -3050,7 +3070,7 @@
                 const membros = funcionariosDaEquipe(e.id);
                 const lider = getFuncionario(e.liderId);
                 const c = custoHoraEquipe(e.id);
-                grid.innerHTML += `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+                grid.insertAdjacentHTML('beforeend', `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="font-bold text-slate-800">${esc(e.nome)}</p>
@@ -3072,7 +3092,7 @@
                         <button onclick="abrirModalEquipe('${e.id}')" class="text-indigo-600 text-xs font-bold"><i class="fa-solid fa-pen"></i> Editar</button>
                         <button onclick="excluirEquipe('${e.id}')" class="text-red-500 text-xs font-bold"><i class="fa-solid fa-trash"></i> Excluir</button>
                     </div>
-                </div>`;
+                </div>`);
             });
 
             const tb = document.getElementById('equipesCustoTableBody');
@@ -3235,7 +3255,7 @@
                 const custoP = custoPadraoProduto(p.id);
                 const r = precoDoProduto(p);
                 const sit = situacaoPreco(r, r.params);
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3 font-mono">${esc(p.codigo)}</td>
                     <td class="p-3 font-bold text-slate-800">${esc(p.nome)}<div class="text-[10px] font-normal text-slate-400">${esc(p.referencia)}</div></td>
                     <td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">${LABEL_TIPO_PRODUTO[p.tipoProduto]||'—'}</span></td>
@@ -3254,7 +3274,7 @@
                         <button onclick="abrirModalProduto('${p.id}')" class="text-indigo-600" title="Editar"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="abrirSimuladorPreco('${p.id}')" class="text-emerald-600" title="Simular preço"><i class="fa-solid fa-calculator"></i></button>
                         <button onclick="excluirProduto('${p.id}')" class="text-red-500" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                    </div></td></tr>`;
+                    </div></td></tr>`);
             });
         }
 
@@ -3445,7 +3465,7 @@
                 const abaixo = i.estoqueAtual < i.estoqueMinimo;
                 const zerado = i.estoqueAtual <= 0;
                 const espec = [i.composicao, i.cor, i.tamanho, i.referencia].filter(Boolean).join(' · ');
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50 ${zerado?'bg-amber-50':(abaixo?'bg-red-50':'')}">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50 ${zerado?'bg-amber-50':(abaixo?'bg-red-50':'')}">
                     <td class="p-3 font-mono">${esc(i.codigo)}</td>
                     <td class="p-3 font-bold text-slate-800">${esc(i.nome)}<div class="text-[10px] font-normal text-slate-400">${esc(i.marca)}${i.localizacao?' · '+esc(i.localizacao):''}</div></td>
                     <td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">${LABEL_TIPO_INSUMO[i.tipo]||'—'}</span></td>
@@ -3467,7 +3487,7 @@
                         <button onclick="abrirModalMovEstoque('${i.id}','SAIDA')" class="text-amber-600" title="Saída de material"><i class="fa-solid fa-arrow-up-long"></i></button>
                         <button onclick="abrirModalMovEstoque('${i.id}','AJUSTE')" class="text-sky-600" title="Ajuste de estoque"><i class="fa-solid fa-scale-balanced"></i></button>
                         <button onclick="excluirInsumo('${i.id}')" class="text-red-500" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                    </div></td></tr>`;
+                    </div></td></tr>`);
             });
 
             const valorTotal = state.insumos.reduce((a,i)=>a + i.estoqueAtual * i.custoMedio, 0);
@@ -3493,12 +3513,12 @@
             if (state.movimentacoesEstoque.length === 0) { tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-400">Nenhuma movimentação registrada.</td></tr>'; return; }
             state.movimentacoesEstoque.slice(-100).reverse().forEach(m => {
                 const ins = getInsumo(m.insumoId);
-                tbody.innerHTML += `<tr class="border-b text-slate-500">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b text-slate-500">
                     <td class="p-3 font-mono">${m.data}</td><td class="p-3">${ins?ins.nome:'—'}${m.motivo?'<div class="text-[10px] text-slate-400">'+esc(m.motivo)+(m.observacao?' · '+esc(m.observacao):'')+'</div>':''}</td>
                     <td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded ${m.tipo==='ENTRADA'?'badge-verde':'badge-vermelho'}">${m.tipo}</span></td>
                     <td class="p-3">${m.producaoId||'—'}</td><td class="p-3">${fmtNum(m.quantidade,2)}</td>
                     <td class="p-3">${fmtNum(m.saldoAnterior,2)}</td><td class="p-3">${fmtNum(m.saldoPosterior,2)}</td>
-                    <td class="p-3">${fmtR$(m.custoMovimento)}</td><td class="p-3">${esc(m.usuario)}</td></tr>`;
+                    <td class="p-3">${fmtR$(m.custoMovimento)}</td><td class="p-3">${esc(m.usuario)}</td></tr>`);
             });
         }
 
@@ -3616,7 +3636,7 @@
                 const prod = getProduto(f.produtoId);
                 const custo = custoFicha(f);
                 const insumosTxt = f.itens.map(it => { const ins = getInsumo(it.insumoId); return ins ? `${esc(ins.nome)} (${fmtNum(it.quantidade,3)} ${ins.unidade})` : ''; }).filter(Boolean).join(', ');
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3 font-mono">${f.id}</td><td class="p-3 font-bold">${prod?prod.nome:'—'}</td><td class="p-3">v${f.versao}</td>
                     <td class="p-3">${f.quantidadePadrao}${f.tempoPadraoMin?'<div class="text-[10px] text-slate-400">'+fmtNum(f.tempoPadraoMin,2)+' min/un.</div>':''}</td><td class="p-3 max-w-xs truncate" title="${esc(insumosTxt)}">${esc(insumosTxt)}</td>
                     <td class="p-3 font-semibold">${fmtR$(custo.total)}</td><td class="p-3 font-semibold text-emerald-600">${fmtR$(custo.unitario)}</td>
@@ -3626,7 +3646,7 @@
                         ${f.status==='ATIVA'
                             ? `<button onclick="inativarFicha('${f.id}')" class="text-amber-600" title="Inativar ficha"><i class="fa-solid fa-ban"></i></button>`
                             : `<button onclick="reativarFicha('${f.id}')" class="text-emerald-600" title="Reativar ficha"><i class="fa-solid fa-rotate-left"></i></button>`}
-                    </td></tr>`;
+                    </td></tr>`);
             });
         }
 
@@ -3668,7 +3688,7 @@
                 const capTxt = cap.unidades === Infinity ? 'sem limite calculado'
                     : `${fmtNum(Math.floor(cap.unidades),0)} un.${cap.gargalo ? ' (limite: ' + esc(cap.gargalo.nome) + ')' : ''}`;
                 const capCor = cap.unidades === Infinity ? 'text-slate-500' : (cap.unidades < 1 ? 'text-red-600' : (cap.unidades < 50 ? 'text-amber-600' : 'text-emerald-600'));
-                grid.innerHTML += `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 hover:shadow-md transition-shadow">
+                grid.insertAdjacentHTML('beforeend', `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 hover:shadow-md transition-shadow">
                     <div class="flex justify-between items-start gap-2">
                         <div class="min-w-0">
                             <p class="font-bold text-slate-800 truncate">${esc(p.nome)}</p>
@@ -3683,7 +3703,7 @@
                     <p class="text-[11px] text-slate-500">Ficha ${esc(ficha.id)} · v${ficha.versao}${ficha.tempoPadraoMin?' · '+fmtNum(ficha.tempoPadraoMin,2)+' min/un.':''}</p>
                     <p class="text-[11px] ${capCor}"><i class="fa-solid fa-boxes-stacked"></i> Estoque comporta ${capTxt}</p>
                     <button onclick="abrirModalIniciarProducao('${p.id}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-play"></i> Abrir Ordem de Produção</button>
-                </div>`;
+                </div>`);
             });
         }
 
@@ -4235,25 +4255,33 @@
         // Competência (AAAA-MM) do custo adicional e da ordem de produção.
         const mesCusto = c => String(c.data || '').slice(0, 7);
         const mesOrdem = o => String(o.data || '').slice(0, 7);
-        function calcularCustoAdicionalAlocado(ordem) {
+        // totaisCache (opcional): Map custo -> total do grupo, válido enquanto o conjunto de
+        // finalizadas não muda. O recálculo global usa para não somar o mesmo grupo para cada ordem.
+        function calcularCustoAdicionalAlocado(ordem, totaisCache) {
             const qtdOrdem = Number(ordem.quantidadeAprovada) || 0;
             if (qtdOrdem <= 0) return 0;
-            // Todas as finalizadas (inclusive a própria ordem, que já pode estar finalizada)
-            const finalizadas = state.producoes.filter(p => p.status === 'FINALIZADA' || p.id === ordem.id);
-            const somaGrupo = filtro => finalizadas.filter(filtro).reduce((acc,p) => acc + (Number(p.quantidadeAprovada)||0), 0);
+            let finalizadas = null;
+            const somaGrupo = (c, filtro) => {
+                if (totaisCache && totaisCache.has(c)) return totaisCache.get(c);
+                // Todas as finalizadas (inclusive a própria ordem, que já pode estar finalizada)
+                if (!finalizadas) finalizadas = state.producoes.filter(p => p.status === 'FINALIZADA' || p.id === ordem.id);
+                const total = finalizadas.filter(filtro).reduce((acc,p) => acc + (Number(p.quantidadeAprovada)||0), 0);
+                if (totaisCache) totaisCache.set(c, total);
+                return total;
+            };
             let alocado = 0;
             state.custosAdicionais.forEach(c => {
                 const valor = Number(c.valor) || 0;
                 if (!valor) return;
                 let total = 0;
                 if (c.rateio === 'DIRETO_PRODUTO' && c.produtoId === ordem.produtoId) {
-                    total = somaGrupo(p => p.produtoId === c.produtoId);
+                    total = somaGrupo(c, p => p.produtoId === c.produtoId);
                 } else if (c.rateio === 'EQUIPE' && c.equipeId && c.equipeId === ordem.equipeId) {
                     if (mesCusto(c) && mesCusto(c) !== mesOrdem(ordem)) return;
-                    total = somaGrupo(p => p.equipeId === c.equipeId && (!mesCusto(c) || mesOrdem(p) === mesCusto(c)));
+                    total = somaGrupo(c, p => p.equipeId === c.equipeId && (!mesCusto(c) || mesOrdem(p) === mesCusto(c)));
                 } else if (c.rateio === 'PERIODO') {
                     if (mesCusto(c) && mesCusto(c) !== mesOrdem(ordem)) return;
-                    total = somaGrupo(p => !mesCusto(c) || mesOrdem(p) === mesCusto(c));
+                    total = somaGrupo(c, p => !mesCusto(c) || mesOrdem(p) === mesCusto(c));
                 } else return;
                 if (total > 0) alocado += valor * (qtdOrdem / total);
             });
@@ -4262,9 +4290,11 @@
 
         // Recalcula custoAdicionalAlocado e custoTotal de TODAS as ordens finalizadas
         // para manter consistência global (chamada após cada finalização ou alteração de custos adicionais).
+        // Aqui toda ordem já é FINALIZADA, então o total de cada grupo é o mesmo para todas: soma uma vez só.
         function recalcularRateioGlobal() {
+            const totais = new Map();
             state.producoes.filter(o => o.status === 'FINALIZADA').forEach(o => {
-                o.custoAdicionalAlocado = state.config.usarCustosAdicionais ? calcularCustoAdicionalAlocado(o) : 0;
+                o.custoAdicionalAlocado = state.config.usarCustosAdicionais ? calcularCustoAdicionalAlocado(o, totais) : 0;
                 o.custoTotal = (Number(o.materialCost)||0) + (Number(o.laborCost)||0) + o.custoAdicionalAlocado;
                 const base = state.config.baseCalculoCusto === 'produzida' ? o.quantidadeProduzida : o.quantidadeAprovada;
                 o.custoUnitario = base > 0 ? o.custoTotal / base : 0;
@@ -4325,7 +4355,7 @@
                 const p = getProduto(o.produtoId);
                 const eq = getEquipe(o.equipeId);
                 const eficiencia = o.quantidadePlanejada > 0 ? (o.quantidadeProduzida / o.quantidadePlanejada * 100) : 0;
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3 font-mono text-indigo-600 cursor-pointer" onclick="verDetalheProducao('${o.id}')">${o.id}</td>
                     <td class="p-3">${o.data}</td><td class="p-3">${esc(p?p.nome:'')}</td><td class="p-3">${eq?eq.nome:'—'}</td>
                     <td class="p-3">${o.quantidadePlanejada}</td><td class="p-3">${o.quantidadeProduzida}</td><td class="p-3">${o.quantidadeAprovada}</td>
@@ -4334,7 +4364,7 @@
                     <td class="p-3"><div class="flex gap-2">
                         <button onclick="verDetalheProducao('${o.id}')" class="text-indigo-600" title="Ver detalhe"><i class="fa-solid fa-eye"></i></button>
                         ${o.lancamentoManual ? `<button onclick="abrirModalProducaoManual('${o.id}')" class="text-slate-600" title="Editar lançamento manual"><i class="fa-solid fa-pen"></i></button>` : ''}
-                    </div></td></tr>`;
+                    </div></td></tr>`);
             });
         }
 
@@ -5052,10 +5082,10 @@
                 else if (c.rateio === 'EQUIPE') { const e = getEquipe(c.equipeId); ref = e ? 'Equipe: ' + e.nome : '—'; }
                 else ref = 'Todas as produções do período';
                 const rateioLabel = { DIRETO_PRODUTO: 'Direto ao produto', EQUIPE: 'Rateado por equipe', PERIODO: 'Rateado por período' }[c.rateio];
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3">${c.data}</td><td class="p-3">${c.tipo}</td><td class="p-3 font-semibold">${fmtR$(c.valor)}</td>
                     <td class="p-3">${rateioLabel}</td><td class="p-3">${ref}</td><td class="p-3">${c.observacao||''}</td>
-                    <td class="p-3"><button onclick="excluirCustoAdicional('${c.id}')" class="text-red-500"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+                    <td class="p-3"><button onclick="excluirCustoAdicional('${c.id}')" class="text-red-500"><i class="fa-solid fa-trash"></i></button></td></tr>`);
             });
             renderizarCustoPadraoReal();
         }
@@ -5114,10 +5144,10 @@
                 const diferenca = real - padrao;
                 const pct = padrao > 0 ? (diferenca/padrao*100) : 0;
                 const sit = classificarVariacao(pct);
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3 font-bold">${esc(p.nome)}</td><td class="p-3">${fmtR$(padrao)}</td><td class="p-3">${fmtR$(real)}</td>
                     <td class="p-3">${fmtR$(diferenca)}</td><td class="p-3">${fmtPct(pct)}</td>
-                    <td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded ${sit.cls}">${sit.emoji} ${sit.label}</span></td></tr>`;
+                    <td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded ${sit.cls}">${sit.emoji} ${sit.label}</span></td></tr>`);
             });
             if (!tbody.innerHTML) tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Sem produções finalizadas para comparar.</td></tr>';
         }
@@ -5139,12 +5169,12 @@
                 totalPerdido += o.quantidadePerdida; totalProduzido += o.quantidadeProduzida; custoTotalPerdas += custoPerda;
                 const acimaLimite = taxa > state.config.limitePerdaPercent;
                 if (o.quantidadePerdida <= 0) return;
-                tbody.innerHTML += `<tr class="border-b hover:bg-slate-50 ${acimaLimite?'bg-red-50':''}">
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50 ${acimaLimite?'bg-red-50':''}">
                     <td class="p-3 font-mono">${o.id}</td><td class="p-3">${o.data}</td><td class="p-3">${esc(p?p.nome:'')}</td>
                     <td class="p-3">${eq?eq.nome:(getFuncionario(o.responsavelId)?.nome||'—')}</td>
                     <td class="p-3">${o.quantidadeProduzida}</td><td class="p-3 font-bold text-red-600">${o.quantidadePerdida}</td>
                     <td class="p-3">${fmtPct(taxa)}</td><td class="p-3">${fmtR$(custoPerda)}</td><td class="p-3">${o.motivoPerda||'—'}</td>
-                    <td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded ${acimaLimite?'badge-vermelho':'badge-verde'}">${acimaLimite?'Acima do limite':'Normal'}</span></td></tr>`;
+                    <td class="p-3"><span class="text-[10px] font-bold px-2 py-0.5 rounded ${acimaLimite?'badge-vermelho':'badge-verde'}">${acimaLimite?'Acima do limite':'Normal'}</span></td></tr>`);
             });
             if (!tbody.innerHTML) tbody.innerHTML = '<tr><td colspan="10" class="p-4 text-center text-slate-400">Nenhuma perda registrada no período.</td></tr>';
             document.getElementById('perdaTotalUn').innerText = fmtNum(totalPerdido,0);
@@ -5172,11 +5202,11 @@
                     const perdas = lista.reduce((a,o)=>a+o.quantidadePerdida,0);
                     const custoMedioUnit = lista.reduce((a,o)=>a+o.custoUnitario,0)/lista.length;
                     const eficiencia = planejado>0 ? (produzido/planejado*100) : 0;
-                    tbodyProd.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                    tbodyProd.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                         <td class="p-3 font-bold">${esc(p.nome)}</td><td class="p-3">${planejado}</td><td class="p-3">${produzido}</td>
                         <td class="p-3">${aprovado}</td><td class="p-3">${perdas}</td>
                         <td class="p-3 font-semibold ${eficiencia>=state.config.metaEficienciaPadrao?'text-emerald-600':'text-amber-600'}">${fmtPct(eficiencia)}</td>
-                        <td class="p-3">${fmtR$(custoMedioUnit)}</td></tr>`;
+                        <td class="p-3">${fmtR$(custoMedioUnit)}</td></tr>`);
                 });
                 if (!tbodyProd.innerHTML) tbodyProd.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Sem dados no período.</td></tr>';
             }
@@ -5194,9 +5224,9 @@
                     const planejadoTotal = lista.reduce((a,o)=> a + (o.quantidadePlanejada / nf(o)), 0);
                     const produtividade = horasTotal>0 ? produzidoTotal/horasTotal : 0;
                     const eficiencia = planejadoTotal>0 ? (produzidoTotal/planejadoTotal*100) : 0;
-                    tbodyFunc.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                    tbodyFunc.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                         <td class="p-2 font-bold">${esc(f.nome)}</td><td class="p-2">${fmtNum(produzidoTotal,1)}</td><td class="p-2">${fmtNum(horasTotal,1)}h</td>
-                        <td class="p-2">${fmtNum(produtividade,2)}/h</td><td class="p-2">${fmtPct(eficiencia)}</td></tr>`;
+                        <td class="p-2">${fmtNum(produtividade,2)}/h</td><td class="p-2">${fmtPct(eficiencia)}</td></tr>`);
                 });
                 if (!tbodyFunc.innerHTML) tbodyFunc.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">Sem dados.</td></tr>';
             }
@@ -5213,9 +5243,9 @@
                     const planejadoTotal = lista.reduce((a,o)=>a+o.quantidadePlanejada,0);
                     const produtividade = horasTotal>0 ? produzidoTotal/horasTotal : 0;
                     const eficiencia = planejadoTotal>0 ? (produzidoTotal/planejadoTotal*100) : 0;
-                    tbodyEq.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                    tbodyEq.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                         <td class="p-2 font-bold">${esc(eq.nome)}</td><td class="p-2">${produzidoTotal}</td><td class="p-2">${fmtNum(horasTotal,1)}h</td>
-                        <td class="p-2">${fmtNum(produtividade,2)}/h</td><td class="p-2">${fmtPct(eficiencia)}</td></tr>`;
+                        <td class="p-2">${fmtNum(produtividade,2)}/h</td><td class="p-2">${fmtPct(eficiencia)}</td></tr>`);
                 });
                 if (!tbodyEq.innerHTML) tbodyEq.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">Sem dados.</td></tr>';
             }
@@ -5243,11 +5273,11 @@
             if (!tbodyF) return;
             tbodyF.innerHTML = '';
             dadosFunc.forEach((d,i) => {
-                tbodyF.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbodyF.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3 font-bold">${i+1}${i===0?' 🏆':''}</td><td class="p-3">${esc(d.f.nome)}</td>
                     <td class="p-3">${fmtNum(d.produzido,1)}</td><td class="p-3">${fmtNum(d.aprovado,1)}</td><td class="p-3">${fmtNum(d.perdido,1)}</td>
                     <td class="p-3">${fmtNum(d.horas,1)}h</td><td class="p-3">${fmtNum(d.produtividade,2)}/h</td>
-                    <td class="p-3">${fmtPct(d.eficiencia)}</td><td class="p-3">${d.producoes}</td><td class="p-3">${fmtR$(d.custo)}</td></tr>`;
+                    <td class="p-3">${fmtPct(d.eficiencia)}</td><td class="p-3">${d.producoes}</td><td class="p-3">${fmtR$(d.custo)}</td></tr>`);
             });
             if (!tbodyF.innerHTML) tbodyF.innerHTML = '<tr><td colspan="10" class="p-4 text-center text-slate-400">Sem dados no período.</td></tr>';
 
@@ -5267,10 +5297,10 @@
             if (!tbodyE) return;
             tbodyE.innerHTML = '';
             dadosEq.forEach((d,i) => {
-                tbodyE.innerHTML += `<tr class="border-b hover:bg-slate-50">
+                tbodyE.insertAdjacentHTML('beforeend', `<tr class="border-b hover:bg-slate-50">
                     <td class="p-3 font-bold">${i+1}${i===0?' 🏆':''}</td><td class="p-3">${esc(d.eq.nome)}</td>
                     <td class="p-3">${d.total}</td><td class="p-3">${d.aprovada}</td><td class="p-3">${fmtPct(d.eficiencia)}</td>
-                    <td class="p-3">${fmtNum(d.produtividade,2)}/h</td><td class="p-3">${d.perdas}</td><td class="p-3">${fmtR$(d.custoMedio)}</td><td class="p-3">${d.produtos}</td></tr>`;
+                    <td class="p-3">${fmtNum(d.produtividade,2)}/h</td><td class="p-3">${d.perdas}</td><td class="p-3">${fmtR$(d.custoMedio)}</td><td class="p-3">${d.produtos}</td></tr>`);
             });
             if (!tbodyE.innerHTML) tbodyE.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-400">Sem dados no período.</td></tr>';
         }
@@ -5286,7 +5316,7 @@
             state.funcionarios.filter(f=>f.metaIndividual>0).forEach(f => {
                 const real = finalizadas.filter(o=>(o.funcionarioIds||[]).includes(f.id)).reduce((a,o)=>a+(o.quantidadeAprovada/(((o.funcionarioIds||[]).length)||1)),0);
                 const pct = f.metaIndividual>0 ? (real/f.metaIndividual*100) : 0;
-                tbF.innerHTML += `<tr class="border-b"><td class="p-2">${esc(f.nome)}</td><td class="p-2">${f.metaIndividual}</td><td class="p-2">${fmtNum(real,1)}</td><td class="p-2 font-bold ${pct>=100?'text-emerald-600':'text-amber-600'}">${fmtPct(pct)}</td></tr>`;
+                tbF.insertAdjacentHTML('beforeend', `<tr class="border-b"><td class="p-2">${esc(f.nome)}</td><td class="p-2">${f.metaIndividual}</td><td class="p-2">${fmtNum(real,1)}</td><td class="p-2 font-bold ${pct>=100?'text-emerald-600':'text-amber-600'}">${fmtPct(pct)}</td></tr>`);
             });
             if (!tbF.innerHTML) tbF.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-slate-400">Nenhuma meta definida.</td></tr>';
 
@@ -5296,7 +5326,7 @@
             state.equipes.filter(e=>e.meta>0).forEach(eq => {
                 const real = finalizadas.filter(o=>o.equipeId===eq.id).reduce((a,o)=>a+o.quantidadeAprovada,0);
                 const pct = eq.meta>0 ? (real/eq.meta*100) : 0;
-                tbE.innerHTML += `<tr class="border-b"><td class="p-2">${esc(eq.nome)}</td><td class="p-2">${eq.meta}</td><td class="p-2">${fmtNum(real,1)}</td><td class="p-2 font-bold ${pct>=100?'text-emerald-600':'text-amber-600'}">${fmtPct(pct)}</td></tr>`;
+                tbE.insertAdjacentHTML('beforeend', `<tr class="border-b"><td class="p-2">${esc(eq.nome)}</td><td class="p-2">${eq.meta}</td><td class="p-2">${fmtNum(real,1)}</td><td class="p-2 font-bold ${pct>=100?'text-emerald-600':'text-amber-600'}">${fmtPct(pct)}</td></tr>`);
             });
             if (!tbE.innerHTML) tbE.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-slate-400">Nenhuma meta definida.</td></tr>';
 
@@ -5306,7 +5336,7 @@
             state.produtos.filter(p=>p.metaProducao>0).forEach(p => {
                 const real = finalizadas.filter(o=>o.produtoId===p.id).reduce((a,o)=>a+o.quantidadeAprovada,0);
                 const pct = p.metaProducao>0 ? (real/p.metaProducao*100) : 0;
-                tbP.innerHTML += `<tr class="border-b"><td class="p-2">${esc(p.nome)}</td><td class="p-2">${p.metaProducao}</td><td class="p-2">${fmtNum(real,1)}</td><td class="p-2 font-bold ${pct>=100?'text-emerald-600':'text-amber-600'}">${fmtPct(pct)}</td></tr>`;
+                tbP.insertAdjacentHTML('beforeend', `<tr class="border-b"><td class="p-2">${esc(p.nome)}</td><td class="p-2">${p.metaProducao}</td><td class="p-2">${fmtNum(real,1)}</td><td class="p-2 font-bold ${pct>=100?'text-emerald-600':'text-amber-600'}">${fmtPct(pct)}</td></tr>`);
             });
             if (!tbP.innerHTML) tbP.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-slate-400">Nenhuma meta definida.</td></tr>';
         }
@@ -5757,26 +5787,11 @@
         // ============================================================
         // RELATÓRIOS
         // ============================================================
+        // Antes desenhava os 19 sub-relatórios a cada atualização; agora só o que está aberto.
         function renderizarRelatorios() {
-            renderizarRelatorioGeral();
-            renderizarRelatorioPorProduto();
-            renderizarRelatorioTempos();
-            if (document.getElementById('relSubFuncionario') && document.getElementById('relSubFuncionario').classList.contains('active')) renderizarRelatorioFuncionario();
-            if (document.getElementById('relSubEquipe') && document.getElementById('relSubEquipe').classList.contains('active')) renderizarRelatorioEquipe();
-            renderizarRelatorioEstoque();
-            renderizarRelatorioConsumo();
-            renderizarRelatorioCustos();
-            renderizarRelatorioMargem();
-            renderizarRelatorioMaoObra();
-            renderizarRelatorioABC();
-            renderizarRelatorioWIP();
-            renderizarRelatorioEtapas();
-            renderizarRelatorioPerdasMotivo();
-            renderizarRelatorioComparativo();
-            renderizarRelatorioCompras();
-            renderizarRelatorioMovimentacoes();
-            renderizarRelatorioFichaCusto();
-            renderizarRelatorioGerencial();
+            const ativo = document.querySelector('#relatoriosTab .subtab-content.active');
+            const fn = ativo && RENDER_RELATORIO[ativo.id];
+            if (fn) fn(); else RENDER_RELATORIO.relSubGeral();
         }
 
         // ---------- ORDENS EM ABERTO (WIP) ----------
@@ -6385,8 +6400,8 @@
                 const variacao = padrao>0 ? ((custoUnit-padrao)/padrao*100) : 0;
                 const planejado = lista.reduce((a,o)=>a+o.quantidadePlanejada,0);
                 const eficiencia = planejado>0 ? (produzido/planejado*100) : 0;
-                tbody.innerHTML += `<tr class="border-b"><td class="p-3 font-bold">${esc(p.nome)}</td><td class="p-3">${produzido}</td><td class="p-3">${aprovado}</td><td class="p-3">${perdido}</td>
-                    <td class="p-3">${fmtR$(custoTotal)}</td><td class="p-3">${fmtR$(custoUnit)}</td><td class="p-3">${fmtR$(padrao)}</td><td class="p-3">${fmtPct(variacao)}</td><td class="p-3">${fmtPct(eficiencia)}</td></tr>`;
+                tbody.insertAdjacentHTML('beforeend', `<tr class="border-b"><td class="p-3 font-bold">${esc(p.nome)}</td><td class="p-3">${produzido}</td><td class="p-3">${aprovado}</td><td class="p-3">${perdido}</td>
+                    <td class="p-3">${fmtR$(custoTotal)}</td><td class="p-3">${fmtR$(custoUnit)}</td><td class="p-3">${fmtR$(padrao)}</td><td class="p-3">${fmtPct(variacao)}</td><td class="p-3">${fmtPct(eficiencia)}</td></tr>`);
             });
             if (!tbody.innerHTML) tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-400">Nenhum dado no período.</td></tr>';
         }
@@ -6792,6 +6807,43 @@
             registrarLog('EXPORTAR', 'RELATORIO', 'Relatório gerencial exportado em PDF');
         }
 
+        // Bibliotecas pesadas carregadas sob demanda (≈1,2 MB que antes travavam a abertura da página).
+        const LIBS_SOB_DEMANDA = {
+            xlsx: { pronto: () => !!window.XLSX, arquivos: ['assets/lib/xlsx.full.min.js'] },
+            pdf:  { pronto: () => !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable),
+                    arquivos: ['assets/lib/jspdf.umd.min.js', 'assets/lib/jspdf.plugin.autotable.min.js'] }
+        };
+        const libsCarregando = {};
+        function carregarScript(src) {
+            return new Promise((ok, falha) => {
+                const s = document.createElement('script');
+                s.src = src; s.async = false;
+                s.onload = () => ok();
+                s.onerror = () => { s.remove(); falha(new Error('Não foi possível carregar ' + src + '. Verifique a internet e tente de novo.')); };
+                document.head.appendChild(s);
+            });
+        }
+        function carregarLib(nome) {
+            const lib = LIBS_SOB_DEMANDA[nome];
+            if (lib.pronto()) return Promise.resolve();
+            if (!libsCarregando[nome]) {
+                libsCarregando[nome] = lib.arquivos.reduce((p, src) => p.then(() => carregarScript(src)), Promise.resolve())
+                    .catch(e => { delete libsCarregando[nome]; throw e; });
+            }
+            return libsCarregando[nome];
+        }
+        // Envolve uma função de exportação: carrega a biblioteca antes e depois chama a original.
+        function comLib(nome, fn) {
+            return async function () {
+                try { await carregarLib(nome); }
+                catch (e) { alert(e.message); return; }
+                return fn.apply(this, arguments);
+            };
+        }
+        exportarPrecoExcel = comLib('xlsx', exportarPrecoExcel);
+        exportarRelatorioExcel = comLib('xlsx', exportarRelatorioExcel);
+        exportarRelatorioPDF = comLib('pdf', exportarRelatorioPDF);
+
         // Sincronização com o banco de dados na nuvem: ver assets/nuvem.js
 
         const RENDER_POR_ABA = {
@@ -6839,7 +6891,7 @@
         });
     </script>
     <script src="assets/nuvem.js?v=a23e3c55"></script>
-    <script src="assets/impressao.js?v=34664217"></script>
+    <script src="assets/impressao.js?v=0e8ac5ce"></script>
     <script src="assets/responsivo.js?v=eec0ca12"></script>
     <script src="assets/operador.js?v=e523b0c1"></script>
 </body>
